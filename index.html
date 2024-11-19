@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Input Analyzer</title>
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Input Analyzer</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+            color: #333;
+        }
+
+        h1 {
+            margin: 20px 0;
+            font-size: 2.5em;
+            color: #fff;
+        }
+
+        button {
+            font-size: 1.2em;
+            margin: 10px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            background-color: #fff;
+            color: #ff7f50;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background-color: #ff7f50;
+            color: #fff;
+        }
+
+        .info {
+            font-size: 1.5em;
+            margin: 20px;
+            color: #fff;
+        }
+
+        canvas {
+            display: block;
+            margin: 20px auto;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>Audio Input Analyzer</h1>
+    <button id="micButton">Start Microphone Analysis</button>
+    <button id="desktopAudioButton">Start System Audio Analysis</button>
+    <div class="info" id="audioInfo">Waiting for input...</div>
+    <canvas id="visualizer" width="800" height="300"></canvas>
+
+    <script>
+        const canvas = document.getElementById('visualizer');
+const canvasCtx = canvas.getContext('2d');
+const audioInfo = document.getElementById('audioInfo');
+const noteFrequencies = [
+    { note: "C", freq: 261.63 },
+    { note: "C#", freq: 277.18 },
+    { note: "D", freq: 293.66 },
+    { note: "D#", freq: 311.13 },
+    { note: "E", freq: 329.63 },
+    { note: "F", freq: 349.23 },
+    { note: "F#", freq: 369.99 },
+    { note: "G", freq: 392.00 },
+    { note: "G#", freq: 415.30 },
+    { note: "A", freq: 440.00 },
+    { note: "A#", freq: 466.16 },
+    { note: "B", freq: 493.88 },
+    { note: "C2", freq: 523.25 },
+    { note: "D2", freq: 587.33 },
+    { note: "E2", freq: 659.25 },
+    { note: "F2", freq: 698.46 },
+    { note: "G2", freq: 783.99 },
+    { note: "A2", freq: 880.00 },
+    { note: "B2", freq: 987.77 },
+];
+
+document.getElementById('micButton').addEventListener('click', async () => {
+    await startAudioAnalysis("microphone");
+});
+
+document.getElementById('desktopAudioButton').addEventListener('click', async () => {
+    await startAudioAnalysis("system");
+});
+
+async function startAudioAnalysis(sourceType) {
+    const audioContext = new AudioContext();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 8192; // Increased FFT size for better resolution
+
+    try {
+        const stream =
+            sourceType === "microphone"
+                ? await navigator.mediaDevices.getUserMedia({ audio: true })
+                : await navigator.mediaDevices.getDisplayMedia({ audio: true });
+
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+
+        visualize(analyser, sourceType);
+        detectPitch(analyser, audioContext.sampleRate, sourceType);
+    } catch (error) {
+        audioInfo.textContent = `Error accessing ${sourceType}: ${error.message}`;
+    }
+}
+
+function visualize(analyser, sourceType) {
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function draw() {
+        analyser.getByteFrequencyData(dataArray);
+
+        canvasCtx.fillStyle = '#222';
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let barHeight;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+            barHeight = dataArray[i];
+            canvasCtx.fillStyle = sourceType === "microphone" ? `rgb(50, ${barHeight + 100}, 50)` : `rgb(${barHeight + 100}, 50, 50)`;
+            canvasCtx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+            x += barWidth + 1;
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    draw();
+}
+
+function detectPitch(analyser, sampleRate, sourceType) {
+    const buffer = new Float32Array(analyser.fftSize);
+
+    function autoCorrelate() {
+        analyser.getFloatTimeDomainData(buffer);
+
+        const frequency = findDominantFrequency(buffer, sampleRate);
+
+        if (frequency > 0) {
+            const note = getClosestNote(frequency);
+            audioInfo.textContent = `${sourceType}: ${Math.round(frequency)} Hz (${note.note})`;
+        } else {
+            audioInfo.textContent = `${sourceType}: No pitch detected`;
+        }
+
+        requestAnimationFrame(autoCorrelate);
+    }
+
+    autoCorrelate();
+}
+
+function findDominantFrequency(buffer, sampleRate) {
+    const bufferSize = buffer.length;
+    const spectrum = new Float32Array(bufferSize / 2);
+
+    // Apply Hanning window to reduce spectral leakage
+    for (let i = 0; i < bufferSize; i++) {
+        buffer[i] *= 0.5 * (1 - Math.cos((2 * Math.PI * i) / (bufferSize - 1)));
+    }
+
+    const real = new Float32Array(bufferSize);
+    const imag = new Float32Array(bufferSize);
+
+    for (let i = 0; i < bufferSize; i++) {
+        real[i] = buffer[i];
+    }
+
+    fft(real, imag);
+
+    // Compute magnitude spectrum
+    for (let i = 0; i < spectrum.length; i++) {
+        spectrum[i] = Math.sqrt(real[i] ** 2 + imag[i] ** 2);
+    }
+
+    let maxAmplitude = -Infinity;
+    let peakIndex = -1;
+
+    // Find the peak frequency
+    for (let i = 0; i < spectrum.length; i++) {
+        if (spectrum[i] > maxAmplitude) {
+            maxAmplitude = spectrum[i];
+            peakIndex = i;
+        }
+    }
+
+    if (peakIndex > 0) {
+        return (peakIndex * sampleRate) / bufferSize;
+    }
+
+    return -1;
+}
+
+function fft(real, imag) {
+    const N = real.length;
+    if (N <= 1) return;
+
+    const halfN = N / 2;
+
+    const evenReal = real.filter((_, i) => i % 2 === 0);
+    const oddReal = real.filter((_, i) => i % 2 !== 0);
+    const evenImag = imag.filter((_, i) => i % 2 === 0);
+    const oddImag = imag.filter((_, i) => i % 2 !== 0);
+
+    fft(evenReal, evenImag);
+    fft(oddReal, oddImag);
+
+    for (let k = 0; k < halfN; k++) {
+        const expReal = Math.cos((-2 * Math.PI * k) / N);
+        const expImag = Math.sin((-2 * Math.PI * k) / N);
+
+        const tReal = expReal * oddReal[k] - expImag * oddImag[k];
+        const tImag = expReal * oddImag[k] + expImag * oddReal[k];
+
+        real[k] = evenReal[k] + tReal;
+        imag[k] = evenImag[k] + tImag;
+        real[k + halfN] = evenReal[k] - tReal;
+        imag[k + halfN] = evenImag[k] - tImag;
+    }
+}
+
+function getClosestNote(frequency) {
+    return noteFrequencies.reduce((prev, curr) =>
+        Math.abs(curr.freq - frequency) < Math.abs(prev.freq - frequency) ? curr : prev
+    );
+}
+
+    </script>
+</body>
+</html>
