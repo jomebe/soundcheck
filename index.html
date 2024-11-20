@@ -161,7 +161,7 @@
             });
             
             const analyser = audioContext.createAnalyser();
-            analyser.fftSize = 32768; // 최대 FFT 크기로 설정
+            analyser.fftSize = 4096; // 최대 FFT 크기로 설정
             analyser.smoothingTimeConstant = 0.8;
             analyser.minDecibels = -100;
             analyser.maxDecibels = -10;
