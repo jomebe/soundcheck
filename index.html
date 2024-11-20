@@ -1,246 +1,356 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Input Analyzer</title>
-    
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Input Analyzer</title>
+    <title>고정밀 음성 분석기</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+        
         body {
-            font-family: 'Roboto', sans-serif;
+            font-family: 'Noto Sans KR', sans-serif;
             text-align: center;
             margin: 0;
-            padding: 0;
-            background: linear-gradient(135deg, #ff9a9e, #fad0c4);
-            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
         }
 
         h1 {
             margin: 20px 0;
             font-size: 2.5em;
+            font-weight: 700;
             color: #fff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0;
         }
 
         button {
-            font-size: 1.2em;
-            margin: 10px;
-            padding: 10px 20px;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 1.1em;
+            padding: 12px 25px;
             border: none;
-            border-radius: 25px;
-            background-color: #fff;
-            color: #ff7f50;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #1a2a6c;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
 
         button:hover {
-            background-color: #ff7f50;
-            color: #fff;
+            transform: translateY(-2px);
+            background: #fff;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
 
         .info {
-            font-size: 1.5em;
-            margin: 20px;
-            color: #fff;
+            font-size: 1.8em;
+            margin: 25px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .note-info {
+            font-size: 1.2em;
+            margin: 10px 0;
+            color: rgba(255, 255, 255, 0.9);
         }
 
         canvas {
-            display: block;
+            width: 100%;
+            max-width: 1100px;
+            height: 300px;
             margin: 20px auto;
             border-radius: 15px;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .accuracy-meter {
+            width: 200px;
+            height: 20px;
+            margin: 10px auto;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .accuracy-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.3s ease;
         }
     </style>
 </head>
 <body>
-    <h1>Audio Input Analyzer</h1>
-    <button id="micButton">Start Microphone Analysis</button>
-    <button id="desktopAudioButton">Start System Audio Analysis</button>
-    <div class="info" id="audioInfo">Waiting for input...</div>
-    <canvas id="visualizer" width="800" height="300"></canvas>
+    <div class="container">
+        <h1>고정밀 음성 분석기</h1>
+        <div class="button-group">
+            <button id="micButton">마이크 분석 시작</button>
+            <button id="desktopAudioButton">시스템 오디오 분석 시작</button>
+        </div>
+        <div class="info" id="audioInfo">입력 대기 중...</div>
+        <div class="accuracy-meter">
+            <div id="accuracyBar" class="accuracy-bar" style="width: 0%"></div>
+        </div>
+        <div class="note-info" id="noteInfo"></div>
+        <canvas id="visualizer"></canvas>
+    </div>
 
     <script>
         const canvas = document.getElementById('visualizer');
-const canvasCtx = canvas.getContext('2d');
-const audioInfo = document.getElementById('audioInfo');
-const noteFrequencies = [
-    { note: "C", freq: 261.63 },
-    { note: "C#", freq: 277.18 },
-    { note: "D", freq: 293.66 },
-    { note: "D#", freq: 311.13 },
-    { note: "E", freq: 329.63 },
-    { note: "F", freq: 349.23 },
-    { note: "F#", freq: 369.99 },
-    { note: "G", freq: 392.00 },
-    { note: "G#", freq: 415.30 },
-    { note: "A", freq: 440.00 },
-    { note: "A#", freq: 466.16 },
-    { note: "B", freq: 493.88 },
-    { note: "C2", freq: 523.25 },
-    { note: "D2", freq: 587.33 },
-    { note: "E2", freq: 659.25 },
-    { note: "F2", freq: 698.46 },
-    { note: "G2", freq: 783.99 },
-    { note: "A2", freq: 880.00 },
-    { note: "B2", freq: 987.77 },
-];
+        const canvasCtx = canvas.getContext('2d');
+        const audioInfo = document.getElementById('audioInfo');
+        const noteInfo = document.getElementById('noteInfo');
+        const accuracyBar = document.getElementById('accuracyBar');
 
-document.getElementById('micButton').addEventListener('click', async () => {
-    await startAudioAnalysis("microphone");
-});
+        // 확장된 음계 정보 (C0부터 C8까지, 모든 반음 포함)
+        const noteFrequencies = [];
+        const baseFreq = 440; // A4의 주파수
+        const notesSharp = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const notesFlat = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+        const notesKor = ['도', '도#', '레', '레#', '미', '파', '파#', '솔', '솔#', '라', '라#', '시'];
 
-document.getElementById('desktopAudioButton').addEventListener('click', async () => {
-    await startAudioAnalysis("system");
-});
-
-async function startAudioAnalysis(sourceType) {
-    const audioContext = new AudioContext();
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 8192; // Increased FFT size for better resolution
-
-    try {
-        const stream =
-            sourceType === "microphone"
-                ? await navigator.mediaDevices.getUserMedia({ audio: true })
-                : await navigator.mediaDevices.getDisplayMedia({ audio: true });
-
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(analyser);
-
-        visualize(analyser, sourceType);
-        detectPitch(analyser, audioContext.sampleRate, sourceType);
-    } catch (error) {
-        audioInfo.textContent = `Error accessing ${sourceType}: ${error.message}`;
-    }
-}
-
-function visualize(analyser, sourceType) {
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    function draw() {
-        analyser.getByteFrequencyData(dataArray);
-
-        canvasCtx.fillStyle = '#222';
-        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const barWidth = (canvas.width / bufferLength) * 2.5;
-        let barHeight;
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-            barHeight = dataArray[i];
-            canvasCtx.fillStyle = sourceType === "microphone" ? `rgb(50, ${barHeight + 100}, 50)` : `rgb(${barHeight + 100}, 50, 50)`;
-            canvasCtx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-            x += barWidth + 1;
+        // 모든 음계 생성 (C0 ~ C8)
+        for (let octave = 0; octave <= 8; octave++) {
+            for (let noteIndex = 0; noteIndex < 12; noteIndex++) {
+                const noteNumber = octave * 12 + noteIndex - 57; // A4를 기준으로 한 상대적 위치
+                const frequency = baseFreq * Math.pow(2, noteNumber / 12);
+                
+                noteFrequencies.push({
+                    note: notesSharp[noteIndex] + octave,
+                    noteFlat: notesFlat[noteIndex] + octave,
+                    korNote: notesKor[noteIndex] + octave,
+                    freq: frequency
+                });
+            }
         }
 
-        requestAnimationFrame(draw);
-    }
+        document.getElementById('micButton').addEventListener('click', async () => {
+            await startAudioAnalysis("microphone");
+        });
 
-    draw();
-}
+        document.getElementById('desktopAudioButton').addEventListener('click', async () => {
+            await startAudioAnalysis("system");
+        });
 
-function detectPitch(analyser, sampleRate, sourceType) {
-    const buffer = new Float32Array(analyser.fftSize);
+        async function startAudioAnalysis(sourceType) {
+            const audioContext = new AudioContext({
+                latencyHint: 'interactive',
+                sampleRate: 48000
+            });
+            
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 32768; // 최대 FFT 크기로 설정
+            analyser.smoothingTimeConstant = 0.8;
+            analyser.minDecibels = -100;
+            analyser.maxDecibels = -10;
 
-    function autoCorrelate() {
-        analyser.getFloatTimeDomainData(buffer);
+            try {
+                const stream =
+                    sourceType === "microphone"
+                        ? await navigator.mediaDevices.getUserMedia({ 
+                            audio: {
+                                echoCancellation: true,
+                                noiseSuppression: true,
+                                autoGainControl: false
+                            }
+                        })
+                        : await navigator.mediaDevices.getDisplayMedia({ audio: true });
 
-        const frequency = findDominantFrequency(buffer, sampleRate);
+                const source = audioContext.createMediaStreamSource(stream);
+                
+                // 로우패스 필터 추가
+                const lowpass = audioContext.createBiquadFilter();
+                lowpass.type = "lowpass";
+                lowpass.frequency.value = 8000;
+                lowpass.Q.value = 1;
 
-        if (frequency > 0) {
-            const note = getClosestNote(frequency);
-            audioInfo.textContent = `${sourceType}: ${Math.round(frequency)} Hz (${note.note})`;
-        } else {
-            audioInfo.textContent = `${sourceType}: No pitch detected`;
+                // 하이패스 필터 추가
+                const highpass = audioContext.createBiquadFilter();
+                highpass.type = "highpass";
+                highpass.frequency.value = 20;
+                highpass.Q.value = 1;
+
+                source.connect(highpass);
+                highpass.connect(lowpass);
+                lowpass.connect(analyser);
+
+                visualize(analyser, sourceType);
+                detectPitch(analyser, audioContext.sampleRate, sourceType);
+            } catch (error) {
+                audioInfo.textContent = `오류 발생 (${sourceType}): ${error.message}`;
+            }
         }
 
-        requestAnimationFrame(autoCorrelate);
-    }
+        function visualize(analyser, sourceType) {
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
 
-    autoCorrelate();
-}
+            function draw() {
+                requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
 
-function findDominantFrequency(buffer, sampleRate) {
-    const bufferSize = buffer.length;
-    const spectrum = new Float32Array(bufferSize / 2);
+                canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Apply Hanning window to reduce spectral leakage
-    for (let i = 0; i < bufferSize; i++) {
-        buffer[i] *= 0.5 * (1 - Math.cos((2 * Math.PI * i) / (bufferSize - 1)));
-    }
+                const barWidth = (canvas.width / bufferLength) * 2.5;
+                let barHeight;
+                let x = 0;
 
-    const real = new Float32Array(bufferSize);
-    const imag = new Float32Array(bufferSize);
+                for (let i = 0; i < bufferLength; i++) {
+                    barHeight = dataArray[i] * 1.5;
+                    
+                    // 주파수에 따른 색상 계산
+                    const frequency = i * 48000 / analyser.fftSize;
+                    const hue = Math.min(360, (frequency / 4000) * 360);
+                    
+                    canvasCtx.fillStyle = `hsla(${hue}, 100%, 50%, 0.8)`;
+                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                    x += barWidth + 1;
+                }
+            }
 
-    for (let i = 0; i < bufferSize; i++) {
-        real[i] = buffer[i];
-    }
-
-    fft(real, imag);
-
-    // Compute magnitude spectrum
-    for (let i = 0; i < spectrum.length; i++) {
-        spectrum[i] = Math.sqrt(real[i] ** 2 + imag[i] ** 2);
-    }
-
-    let maxAmplitude = -Infinity;
-    let peakIndex = -1;
-
-    // Find the peak frequency
-    for (let i = 0; i < spectrum.length; i++) {
-        if (spectrum[i] > maxAmplitude) {
-            maxAmplitude = spectrum[i];
-            peakIndex = i;
+            draw();
         }
-    }
 
-    if (peakIndex > 0) {
-        return (peakIndex * sampleRate) / bufferSize;
-    }
+        function detectPitch(analyser, sampleRate, sourceType) {
+            const buffer = new Float32Array(analyser.fftSize);
+            const correlationBuffer = new Float32Array(analyser.fftSize);
 
-    return -1;
-}
+            function autoCorrelate() {
+                requestAnimationFrame(autoCorrelate);
+                analyser.getFloatTimeDomainData(buffer);
 
-function fft(real, imag) {
-    const N = real.length;
-    if (N <= 1) return;
+                const [frequency, confidence] = findDominantFrequency(buffer, correlationBuffer, sampleRate);
 
-    const halfN = N / 2;
+                if (frequency > 0) {
+                    const note = getClosestNote(frequency);
+                    const cents = getCents(frequency, note.freq);
+                    const sourceText = sourceType === "microphone" ? "마이크" : "시스템";
+                    
+                    // 정확도에 따른 신뢰도 표시
+                    const accuracyPercent = Math.min(100, confidence * 100);
+                    accuracyBar.style.width = `${accuracyPercent}%`;
+                    
+                    audioInfo.textContent = `${sourceText}: ${Math.round(frequency)}Hz`;
+                    noteInfo.textContent = `음정: ${note.note} / ${note.korNote} (${cents > 0 ? '+' : ''}${cents.toFixed(1)} cents)
+                                          신뢰도: ${accuracyPercent.toFixed(1)}%`;
+                } else {
+                    const sourceText = sourceType === "microphone" ? "마이크" : "시스템";
+                    audioInfo.textContent = `${sourceText}: 음정이 감지되지 않음`;
+                    noteInfo.textContent = "";
+                    accuracyBar.style.width = "0%";
+                }
+            }
 
-    const evenReal = real.filter((_, i) => i % 2 === 0);
-    const oddReal = real.filter((_, i) => i % 2 !== 0);
-    const evenImag = imag.filter((_, i) => i % 2 === 0);
-    const oddImag = imag.filter((_, i) => i % 2 !== 0);
+            autoCorrelate();
+        }
 
-    fft(evenReal, evenImag);
-    fft(oddReal, oddImag);
+        function findDominantFrequency(buffer, correlationBuffer, sampleRate) {
+            const bufferSize = buffer.length;
+            
+            // 신호 정규화
+            let sum = 0;
+            for (let i = 0; i < bufferSize; i++) {
+                sum += buffer[i] * buffer[i];
+            }
+            const rms = Math.sqrt(sum / bufferSize);
+            
+            if (rms < 0.01) return [-1, 0];
 
-    for (let k = 0; k < halfN; k++) {
-        const expReal = Math.cos((-2 * Math.PI * k) / N);
-        const expImag = Math.sin((-2 * Math.PI * k) / N);
+            // Autocorrelation using FFT
+            let maxCorrelation = 0;
+            let maxLag = 0;
+            
+            for (let lag = 0; lag < correlationBuffer.length; lag++) {
+                let correlation = 0;
+                for (let i = 0; i < bufferSize - lag; i++) {
+                    correlation += buffer[i] * buffer[i + lag];
+                }
+                correlationBuffer[lag] = correlation;
+                
+                if (lag > 0 && correlation > maxCorrelation) {
+                    maxCorrelation = correlation;
+                    maxLag = lag;
+                }
+            }
 
-        const tReal = expReal * oddReal[k] - expImag * oddImag[k];
-        const tImag = expReal * oddImag[k] + expImag * oddReal[k];
+            // Multiple pitch candidates
+            const candidates = [];
+            const threshold = maxCorrelation * 0.8;
 
-        real[k] = evenReal[k] + tReal;
-        imag[k] = evenImag[k] + tImag;
-        real[k + halfN] = evenReal[k] - tReal;
-        imag[k + halfN] = evenImag[k] - tImag;
-    }
-}
+            for (let lag = 1; lag < correlationBuffer.length; lag++) {
+                if (correlationBuffer[lag] > threshold) {
+                    const frequency = sampleRate / lag;
+                    if (frequency >= 20 && frequency <= 8000) {
+                        candidates.push({
+                            frequency,
+                            correlation: correlationBuffer[lag]
+                        });
+                    }
+                }
+            }
 
-function getClosestNote(frequency) {
-    return noteFrequencies.reduce((prev, curr) =>
-        Math.abs(curr.freq - frequency) < Math.abs(prev.freq - frequency) ? curr : prev
-    );
-}
+            // Pick the best candidate
+            if (candidates.length > 0) {
+                candidates.sort((a, b) => b.correlation - a.correlation);
+                const bestCandidate = candidates[0];
+                const confidence = bestCandidate.correlation / maxCorrelation;
+                
+                return [bestCandidate.frequency, confidence];
+            }
 
+            return [-1, 0];
+        }
+
+        function getClosestNote(frequency) {
+            let closestNote = noteFrequencies[0];
+            let minCents = Math.abs(getCents(frequency, closestNote.freq));
+
+            for (const note of noteFrequencies) {
+                const cents = Math.abs(getCents(frequency, note.freq));
+                if (cents < minCents) {
+                    closestNote = note;
+                    minCents = cents;
+                }
+            }
+
+            return closestNote;
+        }
+
+        function getCents(frequency, noteFrequency) {
+            return 1200 * Math.log2(frequency / noteFrequency);
+        }
+
+        function resizeCanvas() {
+            const container = document.querySelector('.container');
+            canvas.width = container.clientWidth - 40;
+            canvas.height = 300;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
     </script>
 </body>
 </html>
